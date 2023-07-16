@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
 	csvFilename := flag.String("csv", "problems.csv", "a csv file in the format of 'question,answer'")
+	timeLimit := flag.Int("limit", 30, "the time limit for the quiz in seconds")
 	flag.Parse()
 
 	file, err := os.Open(*csvFilename)
@@ -24,15 +26,28 @@ func main() {
 	}
 	problems := parseLines(lines)
 
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+
 	correct := 0
 
 	// maybe break this out into their own functions for handling the questions, answers, and looping
+problemloop:
 	for i, p := range problems {
-		fmt.Printf("Problem #%d: %s = \n", i+1, p.question)
-		var a string
-		fmt.Scanf("%s\n", &a)
-		if a == p.answer {
-			correct++
+		fmt.Printf("Problem #%d: %s = ", i+1, p.q)
+		answerCh := make(chan string)
+		go func() {
+			var answer string
+			fmt.Scanf("%s\n", &answer)
+			answerCh <- answer
+		}()
+		select {
+		case <-timer.C:
+			fmt.Println()
+			break problemloop
+		case answer := <-answerCh:
+			if answer == p.a {
+				correct++
+			}
 		}
 	}
 
@@ -43,9 +58,9 @@ func parseLines(lines [][]string) []problem {
 	ret := make([]problem, len(lines))
 	for i, line := range lines {
 		ret[i] = problem{
-			question: line[0],
+			q: line[0],
 			// TrimSpace is used here to clean up potential invalid input on the csv input file
-			answer: strings.TrimSpace(line[1]),
+			a: strings.TrimSpace(line[1]),
 		}
 	}
 
@@ -53,8 +68,8 @@ func parseLines(lines [][]string) []problem {
 }
 
 type problem struct {
-	question string
-	answer   string
+	q string
+	a string
 }
 
 func exit(msg string) {
